@@ -1,0 +1,4 @@
+scapy
+requests
+geoip2
+pyfiglet
