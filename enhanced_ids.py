@@ -25,6 +25,7 @@ TIME_WINDOW = 10  # Time window for packet threshold in seconds
 BLOCK_DURATION = 60  # Block duration for automatic unblocking in seconds
 THREAT_FEED_URL = "https://example-threat-feed.com/api/malicious-ips"  # Replace with actual feed
 GEO_DB_PATH = "GeoLite2-City.mmdb"  # Path to GeoIP database
+PROTOCOL_PORTS = {"SMTP": 25, "FTP": 21, "Gopher": 70}
 
 # Data structures for logging and blocking
 packet_counts = defaultdict(int)
@@ -89,7 +90,20 @@ def analyze_packet(packet):
         src_ip = packet["IP"].src
         packet_counts[src_ip] += 1
 
-        # Color-coded output for each request
+        # Check for UDP traffic
+        if packet.haslayer("UDP"):
+            print(f"\033[94m[INFO] UDP request detected from {src_ip}\033[0m")
+            log_ip(src_ip, "UDP Request")
+
+        # Check for specific protocols using ports
+        if packet.haslayer("TCP"):
+            tcp_layer = packet["TCP"]
+            if tcp_layer.dport in PROTOCOL_PORTS.values():
+                protocol_name = [name for name, port in PROTOCOL_PORTS.items() if port == tcp_layer.dport][0]
+                print(f"\033[95m[INFO] {protocol_name} traffic detected from {src_ip}\033[0m")
+                log_ip(src_ip, f"{protocol_name} Traffic")
+
+        # Detect malicious activity based on packet count
         if packet_counts[src_ip] > MAX_PACKETS:
             location = get_geo_location(src_ip)
             print(f"\033[91m[ALERT] Malicious IP detected: {src_ip} (Location: {location})\033[0m")
