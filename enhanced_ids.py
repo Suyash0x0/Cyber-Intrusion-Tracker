@@ -22,6 +22,7 @@ target_ip = sys.argv[1]
 # Configuration
 MAX_PACKETS = 50  # Packet threshold per IP within TIME_WINDOW
 TIME_WINDOW = 10  # Time window for packet threshold in seconds
+BLOCK_DURATION = 60  # Block duration for automatic unblocking in seconds
 THREAT_FEED_URL = "https://example-threat-feed.com/api/malicious-ips"  # Replace with actual feed
 GEO_DB_PATH = "GeoLite2-City.mmdb"  # Path to GeoIP database
 
@@ -32,18 +33,31 @@ log_file = "malicious_ip_log.txt"
 
 # Function to block IP with IPtables
 def block_ip(ip):
-    print(f"[ALERT] Blocking IP: {ip}")
-    subprocess.run(["sudo", "iptables", "-A", "INPUT", "-s", ip, "-j", "DROP"], check=True)
-    block_list[ip] = time.time()
-    log_ip(ip, "Blocked")
+    if ip not in block_list:
+        print(f"\033[91m[ALERT] Blocking IP: {ip}\033[0m")
+        subprocess.run(["sudo", "iptables", "-A", "INPUT", "-s", ip, "-j", "DROP"], check=True)
+        block_list[ip] = time.time()
+        log_ip(ip, "Blocked")
+    else:
+        print(f"\033[93m[INFO] IP {ip} is already blocked.\033[0m")
 
 # Function to unblock IP after timeout
 def unblock_ips():
     for ip, block_time in list(block_list.items()):
-        if time.time() - block_time > TIME_WINDOW * 2:
-            print(f"[INFO] Unblocking IP: {ip}")
+        if time.time() - block_time > BLOCK_DURATION:
+            print(f"\033[92m[INFO] Automatically unblocking IP: {ip}\033[0m")
             subprocess.run(["sudo", "iptables", "-D", "INPUT", "-s", ip, "-j", "DROP"], check=True)
             del block_list[ip]
+
+# Function to manually unblock an IP
+def manual_unblock(ip):
+    if ip in block_list:
+        print(f"\033[92m[INFO] Manually unblocking IP: {ip}\033[0m")
+        subprocess.run(["sudo", "iptables", "-D", "INPUT", "-s", ip, "-j", "DROP"], check=True)
+        del block_list[ip]
+        log_ip(ip, "Manually Unblocked")
+    else:
+        print(f"\033[93m[INFO] IP {ip} is not in the blocklist.\033[0m")
 
 # Log IP with timestamp
 def log_ip(ip, action):
@@ -78,11 +92,11 @@ def analyze_packet(packet):
         # Color-coded output for each request
         if packet_counts[src_ip] > MAX_PACKETS:
             location = get_geo_location(src_ip)
-            print(f"[ALERT] Malicious IP detected: {src_ip} (Location: {location})")
+            print(f"\033[91m[ALERT] Malicious IP detected: {src_ip} (Location: {location})\033[0m")
             log_ip(src_ip, "Detected")
             block_ip(src_ip)
         else:
-            print(f"[INFO] Incoming request from {src_ip} (Packet count: {packet_counts[src_ip]})")
+            print(f"\033[94m[INFO] Incoming request from {src_ip} (Packet count: {packet_counts[src_ip]})\033[0m")
 
 # Reset packet counts
 def reset_packet_counts():
@@ -94,19 +108,32 @@ def start_ids():
     last_reset = time.time()
     last_update = time.time()
 
-    print(f"Starting IDS on target IP {target_ip}...")
+    print(f"Starting IDS on target IP {target_ip}...\n")
+    print("Commands:")
+    print("  - Type 'unblock <IP>' to manually unblock an IP")
+    print("  - Press CTRL+C to stop the IDS\n")
 
-    while True:
-        sniff(prn=analyze_packet, count=1, timeout=1)
-        unblock_ips()
+    try:
+        while True:
+            sniff(prn=analyze_packet, count=1, timeout=1)
+            unblock_ips()  # Automatically unblock IPs
 
-        if time.time() - last_reset > TIME_WINDOW:
-            reset_packet_counts()
-            last_reset = time.time()
+            if time.time() - last_reset > TIME_WINDOW:
+                reset_packet_counts()
+                last_reset = time.time()
 
-        if time.time() - last_update > TIME_WINDOW * 5:
-            update_threat_list()
-            last_update = time.time()
+            if time.time() - last_update > TIME_WINDOW * 5:
+                update_threat_list()
+                last_update = time.time()
+
+            # Check for manual unblocking commands
+            command = input("Enter a command: ")
+            if command.startswith("unblock"):
+                _, ip = command.split()
+                manual_unblock(ip)
+
+    except KeyboardInterrupt:
+        print("\033[93m[INFO] Stopping Cyber Intrusion Tracker...\033[0m")
 
 if __name__ == "__main__":
     start_ids()
