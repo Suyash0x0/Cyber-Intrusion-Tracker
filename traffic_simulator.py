@@ -4,7 +4,7 @@ import time
 from scapy.all import IP, TCP, UDP, send
 import pyfiglet
 
-# Display project introduction
+# Display project introduction banner
 intro_text = pyfiglet.figlet_format("CYBER INTRUSION TRACKER", font="slant")
 print(intro_text)
 print("Request Generator by Suyash Kharate\n")
