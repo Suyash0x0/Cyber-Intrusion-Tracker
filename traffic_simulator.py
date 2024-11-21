@@ -1,60 +1,87 @@
 import sys
-import time
 import random
-from scapy.all import send, IP, TCP
+import time
+from scapy.all import IP, TCP, UDP, send
 import pyfiglet
 
 # Display project introduction
 intro_text = pyfiglet.figlet_format("CYBER INTRUSION TRACKER", font="slant")
 print(intro_text)
-print("Project by Suyash Kharate\n")
+print("Request Generator by Suyash Kharate\n")
 
 # Check for IP address input
 if len(sys.argv) < 2:
-    print("Usage: python3 traffic_simulator.py <target_ip>")
+    print("Usage: python3 request_generator.py <target_ip>")
     sys.exit(1)
 
 target_ip = sys.argv[1]
 
-# Configuration for traffic simulation
-NORMAL_TRAFFIC_INTERVAL = 2  # Interval in seconds between normal requests
-MALICIOUS_TRAFFIC_INTERVAL = 10  # Interval in seconds between malicious bursts
-MALICIOUS_BURST_SIZE = 20  # Number of packets sent in each malicious burst
+# Protocol-specific ports
+PROTOCOL_PORTS = {
+    "SMTP": 25,
+    "FTP": 21,
+    "Gopher": 70,
+    "UDP": 53,  # Default to DNS traffic for demonstration
+}
 
-# Function to generate a random IP address
-def generate_random_ip():
-    return ".".join(str(random.randint(1, 254)) for _ in range(4))
+# Generate SMTP traffic
+def generate_smtp():
+    print("[INFO] Generating SMTP requests...")
+    for _ in range(10):  # Number of packets
+        pkt = IP(dst=target_ip) / TCP(dport=PROTOCOL_PORTS["SMTP"], flags="S")
+        send(pkt, verbose=False)
+        time.sleep(0.5)
 
-# Function to send normal traffic
-def send_normal_traffic():
-    packet = IP(dst=target_ip) / TCP(dport=80)  # Adjust the destination port as needed
-    send(packet, verbose=False)
-    print(f"[INFO] Sent normal request to {target_ip}")
+# Generate FTP traffic
+def generate_ftp():
+    print("[INFO] Generating FTP requests...")
+    for _ in range(10):  # Number of packets
+        pkt = IP(dst=target_ip) / TCP(dport=PROTOCOL_PORTS["FTP"], flags="S")
+        send(pkt, verbose=False)
+        time.sleep(0.5)
 
-# Function to send malicious traffic from random IPs
-def send_malicious_traffic():
-    for _ in range(MALICIOUS_BURST_SIZE):
-        spoofed_ip = generate_random_ip()
-        packet = IP(src=spoofed_ip, dst=target_ip) / TCP(dport=80)
-        send(packet, verbose=False)
-        print(f"[ALERT] Sent malicious request from {spoofed_ip} to {target_ip}")
-        time.sleep(0.1)  # Slight delay between malicious packets
+# Generate Gopher traffic
+def generate_gopher():
+    print("[INFO] Generating Gopher requests...")
+    for _ in range(10):  # Number of packets
+        pkt = IP(dst=target_ip) / TCP(dport=PROTOCOL_PORTS["Gopher"], flags="S")
+        send(pkt, verbose=False)
+        time.sleep(0.5)
 
-# Main traffic simulation function
-def simulate_traffic():
-    last_malicious_time = time.time()
+# Generate UDP traffic
+def generate_udp():
+    print("[INFO] Generating UDP requests...")
+    for _ in range(10):  # Number of packets
+        pkt = IP(dst=target_ip) / UDP(dport=PROTOCOL_PORTS["UDP"])
+        send(pkt, verbose=False)
+        time.sleep(0.5)
+
+# Menu for traffic generation
+def menu():
+    print("\nChoose the type of traffic to generate:")
+    print("1. SMTP (Port 25)")
+    print("2. FTP (Port 21)")
+    print("3. Gopher (Port 70)")
+    print("4. UDP (Port 53)")
+    print("5. Exit")
 
     while True:
-        # Send normal traffic at regular intervals
-        send_normal_traffic()
-        time.sleep(NORMAL_TRAFFIC_INTERVAL)
+        choice = input("\nEnter your choice (1-5): ")
+        if choice == "1":
+            generate_smtp()
+        elif choice == "2":
+            generate_ftp()
+        elif choice == "3":
+            generate_gopher()
+        elif choice == "4":
+            generate_udp()
+        elif choice == "5":
+            print("[INFO] Exiting the request generator.")
+            break
+        else:
+            print("[WARNING] Invalid choice. Please select a valid option.")
 
-        # Periodically send bursts of malicious traffic
-        if time.time() - last_malicious_time > MALICIOUS_TRAFFIC_INTERVAL:
-            print(f"[ALERT] Sending malicious traffic burst from random IPs...")
-            send_malicious_traffic()
-            last_malicious_time = time.time()
-
+# Main function
 if __name__ == "__main__":
-    print(f"Starting traffic simulation on target IP {target_ip} with mixed normal and malicious requests...")
-    simulate_traffic()
+    print(f"[INFO] Target IP: {target_ip}")
+    menu()
