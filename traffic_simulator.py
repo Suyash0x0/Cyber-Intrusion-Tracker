@@ -1,87 +1,51 @@
 import sys
+import socket
 import random
 import time
-from scapy.all import IP, TCP, UDP, send
-import pyfiglet
 
-# Display project introduction banner
-intro_text = pyfiglet.figlet_format("CYBER INTRUSION TRACKER", font="slant")
-print(intro_text)
-print("Request Generator by Suyash Kharate\n")
-
-# Check for IP address input
+# Check for target IP input
 if len(sys.argv) < 2:
-    print("Usage: python3 request_generator.py <target_ip>")
+    print("Usage: python3 laptop2_attacker.py <target_ip>")
     sys.exit(1)
 
 target_ip = sys.argv[1]
+target_port = 80  # Example port for HTTP requests
 
-# Protocol-specific ports
-PROTOCOL_PORTS = {
-    "SMTP": 25,
-    "FTP": 21,
-    "Gopher": 70,
-    "UDP": 53,  # Default to DNS traffic for demonstration
-}
-
-# Generate SMTP traffic
-def generate_smtp():
-    print("[INFO] Generating SMTP requests...")
-    for _ in range(10):  # Number of packets
-        pkt = IP(dst=target_ip) / TCP(dport=PROTOCOL_PORTS["SMTP"], flags="S")
-        send(pkt, verbose=False)
-        time.sleep(0.5)
-
-# Generate FTP traffic
-def generate_ftp():
-    print("[INFO] Generating FTP requests...")
-    for _ in range(10):  # Number of packets
-        pkt = IP(dst=target_ip) / TCP(dport=PROTOCOL_PORTS["FTP"], flags="S")
-        send(pkt, verbose=False)
-        time.sleep(0.5)
-
-# Generate Gopher traffic
-def generate_gopher():
-    print("[INFO] Generating Gopher requests...")
-    for _ in range(10):  # Number of packets
-        pkt = IP(dst=target_ip) / TCP(dport=PROTOCOL_PORTS["Gopher"], flags="S")
-        send(pkt, verbose=False)
-        time.sleep(0.5)
-
-# Generate UDP traffic
-def generate_udp():
-    print("[INFO] Generating UDP requests...")
-    for _ in range(10):  # Number of packets
-        pkt = IP(dst=target_ip) / UDP(dport=PROTOCOL_PORTS["UDP"])
-        send(pkt, verbose=False)
-        time.sleep(0.5)
-
-# Menu for traffic generation
-def menu():
-    print("\nChoose the type of traffic to generate:")
-    print("1. SMTP (Port 25)")
-    print("2. FTP (Port 21)")
-    print("3. Gopher (Port 70)")
-    print("4. UDP (Port 53)")
-    print("5. Exit")
-
+# Generate a mix of malicious and good requests
+def generate_requests():
+    malicious_count = 0
     while True:
-        choice = input("\nEnter your choice (1-5): ")
-        if choice == "1":
-            generate_smtp()
-        elif choice == "2":
-            generate_ftp()
-        elif choice == "3":
-            generate_gopher()
-        elif choice == "4":
-            generate_udp()
-        elif choice == "5":
-            print("[INFO] Exiting the request generator.")
-            break
-        else:
-            print("[WARNING] Invalid choice. Please select a valid option.")
+        try:
+            # Create a TCP socket
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.settimeout(0.5)
 
-# Main function
+            # Generate random behavior
+            if random.random() > 0.5:
+                # Malicious request
+                s.connect((target_ip, target_port))
+                s.send(b"MALICIOUS_PACKET")
+                print(f"\033[91m[ATTACK] Sent malicious packet to {target_ip}\033[0m")
+                malicious_count += 1
+            else:
+                # Good request
+                s.connect((target_ip, target_port))
+                s.send(b"GOOD_PACKET")
+                print(f"\033[92m[INFO] Sent good packet to {target_ip}\033[0m")
+
+            s.close()
+
+            # Pause between requests
+            time.sleep(0.1)
+
+            # Stop after sending 300 malicious packets for testing
+            if malicious_count >= 300:
+                print("Reached limit of 300 malicious packets. Stopping...")
+                break
+
+        except Exception as e:
+            print(f"Error: {e}")
+            break
+
 if __name__ == "__main__":
-    print(f"[INFO] Target IP: {target_ip}")
-    menu()
+    generate_requests()
