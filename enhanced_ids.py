@@ -2,10 +2,8 @@ import sys
 import threading
 from scapy.all import sniff
 import subprocess
-import requests
 import time
 from collections import defaultdict
-from geoip2 import database
 import pyfiglet
 
 # Display project introduction
@@ -14,19 +12,17 @@ print(intro_text)
 print("Project by Suyash Kharate\n")
 
 # Check for IP address input
-if len(sys.argv) < 2:
-    print("Usage: python3 enhanced_ids.py <target_ip>")
+if len(sys.argv) < 3:
+    print("Usage: python3 enhanced_ids.py <target_ip> <source_ip>")
     sys.exit(1)
 
-target_ip = sys.argv[1]
+target_ip = sys.argv[1]  # Laptop 1's IP
+source_ip = sys.argv[2]  # Laptop 2's IP
 
 # Configuration
-MAX_PACKETS = 20  # Block IP after 20 packets in TIME_WINDOW
-TIME_WINDOW = 10  # Time window for packet threshold in seconds
+MAX_PACKETS = 200  # Block IP after 200 packets in TIME_WINDOW
+TIME_WINDOW = 10   # Time window for packet threshold in seconds
 BLOCK_DURATION = 60  # Block duration for automatic unblocking in seconds
-THREAT_FEED_URL = "https://example-threat-feed.com/api/malicious-ips"  # Replace with actual feed
-GEO_DB_PATH = "GeoLite2-City.mmdb"  # Path to GeoIP database
-PROTOCOL_PORTS = {"SMTP": 25, "FTP": 21, "Gopher": 70}
 
 # Data structures for logging and blocking
 packet_counts = defaultdict(int)
@@ -76,51 +72,25 @@ def log_ip(ip, action):
     with open(log_file, "a") as f:
         f.write(f"{timestamp} - {ip} - {action}\n")
 
-# Geo-location lookup
-def get_geo_location(ip):
-    try:
-        with database.Reader(GEO_DB_PATH) as reader:
-            response = reader.city(ip)
-            return f"{response.country.name}, {response.city.name}"
-    except:
-        return "Unknown"
-
-# Threat intelligence update
-def update_threat_list():
-    try:
-        response = requests.get(THREAT_FEED_URL)
-        for ip in response.json().get("malicious_ips", []):
-            block_ip(ip)
-    except Exception as e:
-        print(f"Failed to update threat list: {e}")
-
 # Analyze each packet for malicious activity
 def analyze_packet(packet):
     if packet.haslayer("IP"):
         src_ip = packet["IP"].src
-        packet_counts[src_ip] += 1
+        dst_ip = packet["IP"].dst
 
-        # Check for UDP traffic
-        if packet.haslayer("UDP"):
-            print(f"\033[94m[INFO] UDP request detected from {src_ip}\033[0m")
-            log_ip(src_ip, "UDP Request")
+        # Monitor only requests from source_ip to target_ip
+        if src_ip == source_ip and dst_ip == target_ip:
+            packet_counts[src_ip] += 1
 
-        # Check for specific protocols using ports
-        if packet.haslayer("TCP"):
-            tcp_layer = packet["TCP"]
-            if tcp_layer.dport in PROTOCOL_PORTS.values():
-                protocol_name = [name for name, port in PROTOCOL_PORTS.items() if port == tcp_layer.dport][0]
-                print(f"\033[95m[INFO] {protocol_name} traffic detected from {src_ip}\033[0m")
-                log_ip(src_ip, f"{protocol_name} Traffic")
+            print(f"\033[94m[INFO] Incoming request from {src_ip} to {dst_ip} (Packet count: {packet_counts[src_ip]})\033[0m")
 
-        # Detect malicious activity based on packet count
-        if packet_counts[src_ip] > MAX_PACKETS:
-            location = get_geo_location(src_ip)
-            print(f"\033[91m[ALERT] Malicious IP detected: {src_ip} (Location: {location})\033[0m")
-            log_ip(src_ip, "Detected")
-            block_ip(src_ip)
+            # Detect malicious activity based on packet count
+            if packet_counts[src_ip] > MAX_PACKETS:
+                print(f"\033[91m[ALERT] Malicious IP detected: {src_ip}\033[0m")
+                log_ip(src_ip, "Detected")
+                block_ip(src_ip)
         else:
-            print(f"\033[94m[INFO] Incoming request from {src_ip} (Packet count: {packet_counts[src_ip]})\033[0m")
+            print(f"\033[93m[INFO] Ignoring packet: {src_ip} -> {dst_ip}\033[0m")
 
 # Reset packet counts
 def reset_packet_counts():
@@ -147,9 +117,8 @@ def command_listener():
 # Main IDS function
 def start_ids():
     last_reset = time.time()
-    last_update = time.time()
 
-    print(f"Starting IDS on target IP {target_ip}...\n")
+    print(f"Starting IDS to monitor traffic from {source_ip} to {target_ip}...\n")
     print("Commands:")
     print("  - Type 'show blocklist' to display blocked IPs")
     print("  - Type 'unblock <IP>' to manually unblock an IP")
@@ -166,10 +135,6 @@ def start_ids():
             if time.time() - last_reset > TIME_WINDOW:
                 reset_packet_counts()
                 last_reset = time.time()
-
-            if time.time() - last_update > TIME_WINDOW * 5:
-                update_threat_list()
-                last_update = time.time()
 
     except KeyboardInterrupt:
         print("\033[93m[INFO] Stopping Cyber Intrusion Tracker...\033[0m")
