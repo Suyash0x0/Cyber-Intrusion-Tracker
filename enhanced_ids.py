@@ -1,4 +1,5 @@
 import sys
+import threading
 from scapy.all import sniff
 import subprocess
 import requests
@@ -20,7 +21,7 @@ if len(sys.argv) < 2:
 target_ip = sys.argv[1]
 
 # Configuration
-MAX_PACKETS = 50  # Packet threshold per IP within TIME_WINDOW
+MAX_PACKETS = 20  # Block IP after 20 packets in TIME_WINDOW
 TIME_WINDOW = 10  # Time window for packet threshold in seconds
 BLOCK_DURATION = 60  # Block duration for automatic unblocking in seconds
 THREAT_FEED_URL = "https://example-threat-feed.com/api/malicious-ips"  # Replace with actual feed
@@ -59,6 +60,15 @@ def manual_unblock(ip):
         log_ip(ip, "Manually Unblocked")
     else:
         print(f"\033[93m[INFO] IP {ip} is not in the blocklist.\033[0m")
+
+# Function to show currently blocked IPs
+def show_blocklist():
+    if block_list:
+        print("\033[96m[INFO] Currently Blocked IPs:\033[0m")
+        for ip in block_list.keys():
+            print(f"  - {ip}")
+    else:
+        print("\033[96m[INFO] No IPs are currently blocked.\033[0m")
 
 # Log IP with timestamp
 def log_ip(ip, action):
@@ -117,6 +127,23 @@ def reset_packet_counts():
     global packet_counts
     packet_counts = defaultdict(int)
 
+# Function to handle user commands in a separate thread
+def command_listener():
+    while True:
+        command = input("Enter a command: ").strip()
+        if command == "show blocklist":
+            show_blocklist()
+        elif command.startswith("unblock"):
+            try:
+                _, ip = command.split()
+                manual_unblock(ip)
+            except ValueError:
+                print("\033[91m[ERROR] Invalid command format. Use: unblock <IP>\033[0m")
+        else:
+            print("\033[91m[ERROR] Unknown command. Available commands:\033[0m")
+            print("  - show blocklist")
+            print("  - unblock <IP>")
+
 # Main IDS function
 def start_ids():
     last_reset = time.time()
@@ -124,8 +151,12 @@ def start_ids():
 
     print(f"Starting IDS on target IP {target_ip}...\n")
     print("Commands:")
+    print("  - Type 'show blocklist' to display blocked IPs")
     print("  - Type 'unblock <IP>' to manually unblock an IP")
     print("  - Press CTRL+C to stop the IDS\n")
+
+    # Start the command listener in a separate thread
+    threading.Thread(target=command_listener, daemon=True).start()
 
     try:
         while True:
@@ -139,12 +170,6 @@ def start_ids():
             if time.time() - last_update > TIME_WINDOW * 5:
                 update_threat_list()
                 last_update = time.time()
-
-            # Check for manual unblocking commands
-            command = input("Enter a command: ")
-            if command.startswith("unblock"):
-                _, ip = command.split()
-                manual_unblock(ip)
 
     except KeyboardInterrupt:
         print("\033[93m[INFO] Stopping Cyber Intrusion Tracker...\033[0m")
