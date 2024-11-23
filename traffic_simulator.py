@@ -1,60 +1,55 @@
-import sys
 import socket
 import time
-import random
-import pyfiglet
 
-# Display project introduction
-intro_text = pyfiglet.figlet_format("CYBER INTRUSION ATTACKER", font="slant")
-print(intro_text)
-print("Project by Suyash Kharate\n")
-
-# Check for IP address input
-if len(sys.argv) < 2:
-    print("Usage: python3 attacker_script.py <target_ip>")
-    sys.exit(1)
-
-target_ip = sys.argv[1]
-target_port = 80  # Default port for HTTP; adjust based on testing needs
-
-# Protocol-specific payloads
-payloads = {
-    "SMTP": "MAIL FROM: <attacker@domain.com>\r\nRCPT TO: <victim@domain.com>\r\nDATA\r\nTest SMTP request.\r\n.\r\n",
-    "FTP": "USER attacker\r\nPASS password\r\nLIST\r\n",
-    "UDP": "Random UDP data",
-    "Gopher": "GET / HTTP/1.0\r\n\r\n",
-    "HTTP": "GET /index.html HTTP/1.1\r\nHost: {}\r\n\r\n".format(target_ip),
-}
-
-# Function to send traffic
-def send_request(protocol, target_ip, target_port):
+def send_request(target_ip, target_port, protocol):
     try:
-        if protocol == "UDP":
-            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            sock.sendto(payloads[protocol].encode(), (target_ip, target_port))
-        else:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.connect((target_ip, target_port))
-            sock.send(payloads[protocol].encode())
-        sock.close()
-        print(f"Sent {protocol} request to {target_ip}")
-    except Exception as e:
-        print(f"Failed to send {protocol} request: {e}")
+        if protocol.lower() == "smtp":
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.connect((target_ip, target_port))
+                s.sendall(b"EHLO example.com\r\n")
+                time.sleep(0.5)
+        elif protocol.lower() == "ftp":
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.connect((target_ip, target_port))
+                s.sendall(b"USER anonymous\r\nPASS anonymous\r\n")
+                time.sleep(0.5)
+        elif protocol.lower() == "udp":
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                s.sendto(b"Hello, this is a UDP message!", (target_ip, target_port))
+                time.sleep(0.5)
+        elif protocol.lower() == "gopher":
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.connect((target_ip, target_port))
+                s.sendall(b"GET / HTTP/1.0\r\n\r\n")
+                time.sleep(0.5)
+    except socket.error as e:
+        print(f"Error sending {protocol.upper()} request: {e}")
 
-# Generate requests based on user choice
-protocols = list(payloads.keys())
-print("Available protocols:", ", ".join(protocols))
+def generate_requests(target_ip):
+    protocol = input("Choose the protocol to send requests (SMTP, FTP, UDP, Gopher): ").strip()
+    port_mapping = {"smtp": 25, "ftp": 21, "udp": 53, "gopher": 70}
+    if protocol.lower() not in port_mapping:
+        print("Invalid protocol choice. Exiting.")
+        return
+    
+    target_port = port_mapping[protocol.lower()]
+    print(f"Sending {protocol.upper()} requests to {target_ip}:{target_port}...")
 
-# Main loop
-try:
+    good_count, bad_count = 2, 2  # Initial good and bad request counts
+
     while True:
-        # Pattern: 2 good, 2 malicious; then 4 good, 4 malicious; etc.
-        for count in [2, 4, 8, 16, 32]:  # Expand this pattern as needed
-            for _ in range(count):
-                send_request(random.choice(["HTTP", "SMTP", "FTP"]), target_ip, target_port)  # Good requests
-                time.sleep(0.5)
-            for _ in range(count):
-                send_request(random.choice(["UDP", "Gopher"]), target_ip, target_port)  # Malicious requests
-                time.sleep(0.5)
-except KeyboardInterrupt:
-    print("\nStopping traffic generation...")
+        print(f"Sending {good_count} good requests...")
+        for _ in range(good_count):
+            send_request(target_ip, target_port, protocol)
+
+        print(f"Sending {bad_count} malicious requests...")
+        for _ in range(bad_count):
+            send_request(target_ip, target_port, protocol)  # Simulate malicious requests
+
+        good_count *= 2  # Double the number of good requests
+        bad_count *= 2  # Double the number of malicious requests
+        time.sleep(2)
+
+if __name__ == "__main__":
+    target_ip = input("Enter the target IP address (Laptop 1): ").strip()
+    generate_requests(target_ip)
